@@ -38,7 +38,7 @@ npm run typecheck
 ## Deploy en Vercel
 
 - Importar el repositorio en Vercel
-- Configurar `Root Directory` como `amison-crm`
+- Dejar `Root Directory` en la raiz del repositorio
 - Agregar variables desde `.env.example` si se activa Prisma con base real
 - Ejecutar build command: `npm run build`
 

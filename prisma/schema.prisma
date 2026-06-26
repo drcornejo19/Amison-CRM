@@ -1,0 +1,523 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum LeadStatus {
+  NUEVO
+  CONTACTADO
+  CALIFICADO
+  NO_CALIFICADO
+  CONVERTIDO
+}
+
+enum ClientStatus {
+  PROSPECTO
+  ACTIVO
+  INACTIVO
+  PERDIDO
+}
+
+enum ClientType {
+  LABORATORIO
+  DROGUERIA
+  DISTRIBUIDOR
+  TERCERO
+  OTRO
+}
+
+enum OpportunityPriority {
+  BAJA
+  MEDIA
+  ALTA
+  CRITICA
+}
+
+enum QuoteStatus {
+  BORRADOR
+  PENDIENTE_APROBACION
+  APROBADA
+  ENVIADA
+  ACEPTADA
+  RECHAZADA
+  VENCIDA
+}
+
+enum ApprovalStatus {
+  PENDIENTE
+  APROBADA
+  RECHAZADA
+}
+
+enum ActivityType {
+  LLAMADA
+  EMAIL
+  WHATSAPP
+  REUNION
+  NOTA_INTERNA
+  TAREA
+  ARCHIVO_ENVIADO
+  COTIZACION_ENVIADA
+  CAMBIO_ETAPA
+  APROBACION
+  RECLAMO
+  POSTVENTA
+}
+
+enum TaskStatus {
+  PENDIENTE
+  EN_PROCESO
+  COMPLETADA
+  VENCIDA
+}
+
+enum CurrencyCode {
+  ARS
+  USD
+}
+
+enum DocumentType {
+  COTIZACION_PDF
+  ARTE
+  PLANO
+  FICHA_TECNICA
+  CERTIFICADO
+  ORDEN_COMPRA
+  DOCUMENTO_CALIDAD
+  EMAIL_IMPORTANTE
+  ARCHIVO_CLIENTE
+}
+
+model User {
+  id             String        @id @default(cuid())
+  name           String
+  email          String        @unique
+  passwordHash   String?
+  title          String?
+  isActive       Boolean       @default(true)
+  roleId         String
+  role           Role          @relation(fields: [roleId], references: [id])
+  leads          Lead[]        @relation("LeadOwner")
+  clients        Client[]      @relation("ClientExecutive")
+  opportunities  Opportunity[] @relation("OpportunityOwner")
+  quotes         Quote[]       @relation("QuoteOwner")
+  tasks          Task[]        @relation("TaskOwner")
+  activities     Activity[]    @relation("ActivityOwner")
+  documents      Document[]    @relation("DocumentUploader")
+  approvalsAsked Approval[]    @relation("ApprovalRequester")
+  approvalsTaken Approval[]    @relation("ApprovalApprover")
+  auditLogs      AuditLog[]
+  notifications  Notification[]
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+}
+
+model Role {
+  id          String           @id @default(cuid())
+  key         String           @unique
+  name        String
+  description String?
+  users       User[]
+  permissions RolePermission[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+}
+
+model Permission {
+  id          String           @id @default(cuid())
+  key         String           @unique
+  name        String
+  description String?
+  roles       RolePermission[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+}
+
+model Client {
+  id                   String         @id @default(cuid())
+  legalName            String
+  tradeName            String?
+  cuit                 String?        @unique
+  address              String?
+  province             String?
+  country              String         @default("Argentina")
+  phone                String?
+  website              String?
+  taxCondition         String?
+  type                 ClientType
+  segment              String?
+  status               ClientStatus
+  paymentTerms         String?
+  usualLeadTime        String?
+  usualProducts        String[]
+  priorityLevel        String?
+  commercialRisk       String?
+  internalNotes        String?
+  executiveId          String?
+  executive            User?          @relation("ClientExecutive", fields: [executiveId], references: [id])
+  contacts             Contact[]
+  opportunities        Opportunity[]
+  leads                Lead[]
+  quotes               Quote[]
+  activities           Activity[]
+  tasks                Task[]
+  documents            Document[]
+  aiInsights           AIInsight[]
+  deletedAt            DateTime?
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+}
+
+model Contact {
+  id                String        @id @default(cuid())
+  clientId          String
+  client            Client        @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  firstName         String
+  lastName          String
+  role              String?
+  area              String?
+  email             String?
+  phone             String?
+  whatsapp          String?
+  linkedin          String?
+  isPrimary         Boolean       @default(false)
+  influenceLevel    String?
+  contactPreference String?
+  notes             String?
+  opportunities     Opportunity[] @relation("OpportunityPrimaryContact")
+  leads             Lead[]
+  quotes            Quote[]
+  activities        Activity[]
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+}
+
+model Lead {
+  id               String      @id @default(cuid())
+  company          String
+  cuit             String?
+  industry         String?
+  clientType       ClientType
+  contactId        String?
+  contact          Contact?    @relation(fields: [contactId], references: [id])
+  clientId         String?
+  client           Client?     @relation(fields: [clientId], references: [id])
+  contactName      String?
+  contactRole      String?
+  email            String?
+  phone            String?
+  whatsapp         String?
+  website          String?
+  source           String?
+  interestProduct  String?
+  estimatedVolume  String?
+  urgency          String?
+  score            Int         @default(0)
+  status           LeadStatus
+  ownerId          String?
+  owner            User?       @relation("LeadOwner", fields: [ownerId], references: [id])
+  nextContactAt    DateTime?
+  notes            String?
+  opportunities    Opportunity[]
+  activities       Activity[]
+  tasks            Task[]
+  deletedAt        DateTime?
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+}
+
+model PipelineStage {
+  id            String        @id @default(cuid())
+  name          String        @unique
+  probability   Int
+  sortOrder     Int
+  tone          String?
+  opportunities Opportunity[]
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+}
+
+model Opportunity {
+  id                     String         @id @default(cuid())
+  leadId                 String?
+  lead                   Lead?          @relation(fields: [leadId], references: [id])
+  clientId               String
+  client                 Client         @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  contactId              String?
+  contact                Contact?       @relation("OpportunityPrimaryContact", fields: [contactId], references: [id])
+  productId              String?
+  product                Product?       @relation(fields: [productId], references: [id])
+  pipelineStageId        String
+  pipelineStage          PipelineStage  @relation(fields: [pipelineStageId], references: [id])
+  ownerId                String?
+  owner                  User?          @relation("OpportunityOwner", fields: [ownerId], references: [id])
+  name                   String
+  workType               String?
+  estimatedQuantity      Int?
+  estimatedValue         Decimal?       @db.Decimal(18, 2)
+  currency               CurrencyCode   @default(USD)
+  estimatedMargin        Decimal?       @db.Decimal(5, 2)
+  closeProbability       Int?
+  estimatedCloseDate     DateTime?
+  requiredDeliveryDate   DateTime?
+  priority               OpportunityPriority
+  competitor             String?
+  lossReason             String?
+  nextAction             String?
+  notes                  String?
+  technicalFiles         String[]
+  internalApprovalStatus ApprovalStatus @default(PENDIENTE)
+  riskLevel              String?
+  stagnantDays           Int            @default(0)
+  quotes                 Quote[]
+  activities             Activity[]
+  tasks                  Task[]
+  documents              Document[]
+  approvals              Approval[]
+  createdAt              DateTime       @default(now())
+  updatedAt              DateTime       @updatedAt
+}
+
+model Quote {
+  id                   String         @id @default(cuid())
+  number               String         @unique
+  clientId             String
+  client               Client         @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  contactId            String?
+  contact              Contact?       @relation(fields: [contactId], references: [id])
+  opportunityId        String?
+  opportunity          Opportunity?   @relation(fields: [opportunityId], references: [id])
+  ownerId              String?
+  owner                User?          @relation("QuoteOwner", fields: [ownerId], references: [id])
+  parentQuoteId        String?
+  parentQuote          Quote?         @relation("QuoteVersioning", fields: [parentQuoteId], references: [id])
+  versions             Quote[]        @relation("QuoteVersioning")
+  date                 DateTime
+  validUntil           DateTime
+  currency             CurrencyCode
+  paymentTerms         String?
+  deliveryLeadTime     String?
+  status               QuoteStatus
+  version              Int            @default(1)
+  totalCost            Decimal?       @db.Decimal(18, 2)
+  discount             Decimal?       @db.Decimal(5, 2)
+  finalPrice           Decimal?       @db.Decimal(18, 2)
+  estimatedProfit      Decimal?       @db.Decimal(5, 2)
+  minimumMarginBlocked Boolean        @default(false)
+  rejectionReason      String?
+  items                QuoteItem[]
+  approvals            Approval[]
+  activities           Activity[]
+  tasks                Task[]
+  documents            Document[]
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+}
+
+model QuoteItem {
+  id               String    @id @default(cuid())
+  quoteId          String
+  quote            Quote     @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  productId        String?
+  product          Product?  @relation(fields: [productId], references: [id])
+  productName      String
+  quantity         Int
+  measures         String?
+  material         String?
+  grammage         String?
+  colors           String?
+  specialInks      String[]
+  uvVarnish        Boolean   @default(false)
+  aqueousVarnish   Boolean   @default(false)
+  hotStamping      Boolean   @default(false)
+  embossing        Boolean   @default(false)
+  braille          Boolean   @default(false)
+  dieCutting       Boolean   @default(false)
+  folding          Boolean   @default(false)
+  adhesive         String?
+  variableData     Boolean   @default(false)
+  cameraControl    Boolean   @default(false)
+  traceability     String?
+  tolerances       String?
+  technicalNotes   String?
+  estimatedCost    Decimal?  @db.Decimal(18, 2)
+  suggestedMargin  Decimal?  @db.Decimal(5, 2)
+  appliedMargin    Decimal?  @db.Decimal(5, 2)
+  unitPrice        Decimal?  @db.Decimal(18, 4)
+  totalPrice       Decimal?  @db.Decimal(18, 2)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+}
+
+model Product {
+  id                     String        @id @default(cuid())
+  name                   String
+  category               String
+  description            String?
+  possibleMaterials      String[]
+  possibleFinishes       String[]
+  technicalRequirements  String[]
+  quoteFields            String[]
+  baseCost               Decimal?      @db.Decimal(18, 4)
+  suggestedMargin        Decimal?      @db.Decimal(5, 2)
+  estimatedProductionDays Int?
+  documents              String[]
+  isActive               Boolean       @default(true)
+  opportunities          Opportunity[]
+  quoteItems             QuoteItem[]
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
+}
+
+model Activity {
+  id            String       @id @default(cuid())
+  type          ActivityType
+  title         String
+  outcome       String?
+  nextAction    String?
+  attachmentUrl String?
+  ownerId       String?
+  owner         User?        @relation("ActivityOwner", fields: [ownerId], references: [id])
+  leadId        String?
+  lead          Lead?        @relation(fields: [leadId], references: [id])
+  clientId      String?
+  client        Client?      @relation(fields: [clientId], references: [id])
+  contactId     String?
+  contact       Contact?     @relation(fields: [contactId], references: [id])
+  opportunityId String?
+  opportunity   Opportunity? @relation(fields: [opportunityId], references: [id])
+  quoteId       String?
+  quote         Quote?       @relation(fields: [quoteId], references: [id])
+  happenedAt    DateTime
+  createdAt     DateTime     @default(now())
+}
+
+model Task {
+  id            String       @id @default(cuid())
+  title         String
+  description   String?
+  ownerId       String?
+  owner         User?        @relation("TaskOwner", fields: [ownerId], references: [id])
+  leadId        String?
+  lead          Lead?        @relation(fields: [leadId], references: [id])
+  clientId      String?
+  client        Client?      @relation(fields: [clientId], references: [id])
+  opportunityId String?
+  opportunity   Opportunity? @relation(fields: [opportunityId], references: [id])
+  quoteId       String?
+  quote         Quote?       @relation(fields: [quoteId], references: [id])
+  dueDate       DateTime?
+  priority      OpportunityPriority
+  status        TaskStatus
+  reminder      String?
+  comments      String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+}
+
+model Document {
+  id            String       @id @default(cuid())
+  name          String
+  type          DocumentType
+  version       String?
+  storagePath   String?
+  notes         String?
+  permissions   String?
+  uploadedById  String?
+  uploadedBy    User?        @relation("DocumentUploader", fields: [uploadedById], references: [id])
+  clientId      String?
+  client        Client?      @relation(fields: [clientId], references: [id])
+  opportunityId String?
+  opportunity   Opportunity? @relation(fields: [opportunityId], references: [id])
+  quoteId       String?
+  quote         Quote?       @relation(fields: [quoteId], references: [id])
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+}
+
+model Approval {
+  id            String         @id @default(cuid())
+  status        ApprovalStatus @default(PENDIENTE)
+  reason        String?
+  requestedById String?
+  requestedBy   User?          @relation("ApprovalRequester", fields: [requestedById], references: [id])
+  approvedById  String?
+  approvedBy    User?          @relation("ApprovalApprover", fields: [approvedById], references: [id])
+  opportunityId String?
+  opportunity   Opportunity?   @relation(fields: [opportunityId], references: [id])
+  quoteId       String?
+  quote         Quote?         @relation(fields: [quoteId], references: [id])
+  requestedAt   DateTime       @default(now())
+  resolvedAt    DateTime?
+}
+
+model Reminder {
+  id            String       @id @default(cuid())
+  title         String
+  remindAt      DateTime
+  taskId        String?
+  task          Task?        @relation(fields: [taskId], references: [id])
+  opportunityId String?
+  opportunity   Opportunity? @relation(fields: [opportunityId], references: [id])
+  quoteId       String?
+  quote         Quote?       @relation(fields: [quoteId], references: [id])
+  createdAt     DateTime     @default(now())
+}
+
+model AIInsight {
+  id            String    @id @default(cuid())
+  title         String
+  type          String
+  content       String
+  clientId      String?
+  client        Client?   @relation(fields: [clientId], references: [id])
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Forecast {
+  id          String    @id @default(cuid())
+  name        String
+  periodStart DateTime
+  periodEnd   DateTime
+  optimistic  Decimal   @db.Decimal(18, 2)
+  realistic   Decimal   @db.Decimal(18, 2)
+  conservative Decimal  @db.Decimal(18, 2)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  action    String
+  entity    String
+  entityId  String
+  metadata  Json?
+  actorId   String?
+  actor     User?    @relation(fields: [actorId], references: [id])
+  createdAt DateTime @default(now())
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  title     String
+  body      String
+  severity  String
+  isRead    Boolean  @default(false)
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+}
